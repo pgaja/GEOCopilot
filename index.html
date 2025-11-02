@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>Mapa Municipios de Cantabria</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <style>
+    html,body{height:100%;margin:0}
+    #map{height:100%}
+    .info{position:absolute;top:10px;left:10px;background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:8px;z-index:1000;font-family:system-ui,Arial}
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div id="info" class="info">Pasa el ratón por un municipio</div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const map = L.map('map').setView([43.3,-4.05], 9);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution:'&copy; OpenStreetMap' }).addTo(map);
+
+    const info = document.getElementById('info');
+    function styleDefault(){ return { color:'#555', weight:1, fillColor:'#cfd3dc', fillOpacity:.6 }; }
+
+    fetch('./data/Municipios_Cantabria.geojson')
+      .then(r=>r.json())
+      .then(gj=>{
+        const layer = L.geoJSON(gj, {
+          style: styleDefault,
+          onEachFeature: (f, l) => {
+            l.on('mouseover', e=>{
+              const p=e.target.feature.properties;
+              info.innerHTML = `<b>${p.NOMBRE || p.NAMEUNIT || 'Municipio'}</b>`
+                + (p.tasa_envejecimiento!=null? `<br>Envejecimiento: ${(p.tasa_envejecimiento*100).toFixed(1)}%` : '')
+                + (p.isv_total!=null? `<br>ISV: ${p.isv_total.toFixed(2)}` : '');
+              l.setStyle({weight:2,color:'#000',fillOpacity:.8}); l.bringToFront();
+            });
+            l.on('mouseout', e=>{ layer.resetStyle(e.target); info.textContent='Pasa el ratón por un municipio'; });
+          }
+        }).addTo(map);
+        try{ map.fitBounds(layer.getBounds(), {padding:[20,20]}); }catch(e){}
+      });
+  </script>
+</body>
+</html>
