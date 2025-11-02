@@ -2,45 +2,39 @@
 <html lang="es">
 <head>
   <meta charset="utf-8" />
-  <title>Mapa Municipios de Cantabria</title>
+  <title>Mini-Copilot GIS | Cantabria</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <style>
-    html,body{height:100%;margin:0}
-    #map{height:100%}
-    .info{position:absolute;top:10px;left:10px;background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:8px;z-index:1000;font-family:system-ui,Arial}
+    :root{--b:#e5e7eb;--az:#2563eb}
+    body{margin:0;display:grid;grid-template-columns:320px 1fr;height:100vh;font-family:system-ui,Arial}
+    /* Chat */
+    aside{border-right:1px solid var(--b);background:#fff;display:flex;flex-direction:column}
+    .head{padding:12px;border-bottom:1px solid var(--b)} .head b{display:block}
+    #msgs{flex:1;overflow:auto;padding:12px;background:#fafafa}
+    .m{margin:8px 0}.m.me{text-align:right}
+    .b{display:inline-block;max-width:90%;padding:8px 10px;border-radius:12px}
+    .me .b{background:var(--az);color:#fff}.bot .b{background:#fff;border:1px solid var(--b)}
+    form{display:grid;grid-template-columns:1fr auto;gap:8px;padding:10px;border-top:1px solid var(--b)}
+    input,button{font-size:14px} input{padding:8px;border:1px solid #cbd5e1;border-radius:8px}
+    button{padding:8px 12px;border:0;border-radius:8px;background:var(--az);color:#fff;cursor:pointer}
+    /* Mapa */
+    #map{position:relative} #mapdiv{height:100vh}
+    .info{position:absolute;top:10px;left:10px;background:#fff;border:1px solid var(--b);border-radius:8px;padding:8px;z-index:1000}
+    .leg{position:absolute;bottom:10px;left:10px;background:#fff;border:1px solid var(--b);border-radius:8px;padding:8px;z-index:1000;display:none}
+    .row{display:flex;gap:6px;align-items:center;margin:3px 0}.sw{width:14px;height:14px;border:1px solid #0001;border-radius:3px}
   </style>
 </head>
 <body>
-  <div id="map"></div>
-  <div id="info" class="info">Pasa el ratón por un municipio</div>
-
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script>
-    const map = L.map('map').setView([43.3,-4.05], 9);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution:'&copy; OpenStreetMap' }).addTo(map);
-
-    const info = document.getElementById('info');
-    function styleDefault(){ return { color:'#555', weight:1, fillColor:'#cfd3dc', fillOpacity:.6 }; }
-
-    fetch('./data/Municipios_Cantabria.geojson')
-      .then(r=>r.json())
-      .then(gj=>{
-        const layer = L.geoJSON(gj, {
-          style: styleDefault,
-          onEachFeature: (f, l) => {
-            l.on('mouseover', e=>{
-              const p=e.target.feature.properties;
-              info.innerHTML = `<b>${p.NOMBRE || p.NAMEUNIT || 'Municipio'}</b>`
-                + (p.tasa_envejecimiento!=null? `<br>Envejecimiento: ${(p.tasa_envejecimiento*100).toFixed(1)}%` : '')
-                + (p.isv_total!=null? `<br>ISV: ${p.isv_total.toFixed(2)}` : '');
-              l.setStyle({weight:2,color:'#000',fillOpacity:.8}); l.bringToFront();
-            });
-            l.on('mouseout', e=>{ layer.resetStyle(e.target); info.textContent='Pasa el ratón por un municipio'; });
-          }
-        }).addTo(map);
-        try{ map.fitBounds(layer.getBounds(), {padding:[20,20]}); }catch(e){}
-      });
-  </script>
-</body>
-</html>
+  <!-- CHAT -->
+  <aside>
+    <div class="head">
+      <b>Mini-Copilot GIS</b>
+      <small>Ejemplos: “Mapa de envejecimiento”, “Resalta Santander y Reinosa”, “Reset”.</small>
+    </div>
+    <div id="msgs">
+      <div class="m bot"><div class="b">Hola 👋 Pídeme un mapa o municipios a resaltar.</div></div>
+    </div>
+    <form id="f">
+      <input id="q" placeholder="Escribe tu petición cartográfica…" autocomplete="off"/>
+      <button>Enviar</button>
