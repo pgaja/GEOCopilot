@@ -1,40 +1,354 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="utf-8" />
-  <title>Mini-Copilot GIS | Cantabria</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-  <style>
-    :root{--b:#e5e7eb;--az:#2563eb}
-    body{margin:0;display:grid;grid-template-columns:320px 1fr;height:100vh;font-family:system-ui,Arial}
-    /* Chat */
-    aside{border-right:1px solid var(--b);background:#fff;display:flex;flex-direction:column}
-    .head{padding:12px;border-bottom:1px solid var(--b)} .head b{display:block}
-    #msgs{flex:1;overflow:auto;padding:12px;background:#fafafa}
-    .m{margin:8px 0}.m.me{text-align:right}
-    .b{display:inline-block;max-width:90%;padding:8px 10px;border-radius:12px}
-    .me .b{background:var(--az);color:#fff}.bot .b{background:#fff;border:1px solid var(--b)}
-    form{display:grid;grid-template-columns:1fr auto;gap:8px;padding:10px;border-top:1px solid var(--b)}
-    input,button{font-size:14px} input{padding:8px;border:1px solid #cbd5e1;border-radius:8px}
-    button{padding:8px 12px;border:0;border-radius:8px;background:var(--az);color:#fff;cursor:pointer}
-    /* Mapa */
-    #map{position:relative} #mapdiv{height:100vh}
-    .info{position:absolute;top:10px;left:10px;background:#fff;border:1px solid var(--b);border-radius:8px;padding:8px;z-index:1000}
-    .leg{position:absolute;bottom:10px;left:10px;background:#fff;border:1px solid var(--b);border-radius:8px;padding:8px;z-index:1000;display:none}
-    .row{display:flex;gap:6px;align-items:center;margin:3px 0}.sw{width:14px;height:14px;border:1px solid #0001;border-radius:3px}
-  </style>
+<meta charset="utf-8" />
+<title>Demografía Cantabria · Visor</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+<style>
+  html, body { margin:0; padding:0; height:100%;
+    font-family: "Century Gothic","Avant Garde","Trebuchet MS",system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif; }
+  #topbar { position: fixed; top:0; left:0; right:0; z-index:1000; background:#ffffffdd; backdrop-filter: blur(4px);
+    box-shadow:0 2px 6px rgba(0,0,0,0.15); padding:10px 12px; display:flex; flex-wrap:wrap; gap:12px; align-items:center; font-size:14px; }
+  #map { position:absolute; top:110px; left:0; right:0; bottom:0; }
+  .legend { position:absolute; bottom:20px; left:10px; z-index:1000; background:white; border-radius:8px;
+    box-shadow:0 4px 12px rgba(0,0,0,0.2); padding:10px 12px; font-size:12px; line-height:1.4; min-width:170px; }
+  .legend-row { display:flex; align-items:center; margin-bottom:4px; gap:6px; }
+  .legend-color { width:18px; height:18px; border-radius:3px; border:1px solid #00000033; }
+
+  .legend-pop { position:absolute; right:10px; bottom:20px; background:white; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.2);
+    padding:10px 12px; font-size:12px; line-height:1.4; z-index:1000; min-width:140px; }
+  .legend-pop-title { font-weight:600; font-size:13px; margin-bottom:6px; }
+  .pop-swatch { display:flex; align-items:center; margin-bottom:6px; gap:8px; }
+  .pop-circle { border:2px solid #00000055; background:#b0c4de; opacity:0.7; border-radius:50%; flex-shrink:0; }
+
+  /* Panel de info: arriba dcha, oculto hasta hover */
+  .panel-info { position:absolute; top:120px; right:10px; z-index:1000; background:white; border-radius:8px;
+    box-shadow:0 4px 12px rgba(0,0,0,0.2); padding:10px 12px; font-size:13px; line-height:1.4; min-width:230px; display:none; }
+
+  label { font-weight:600; font-size:13px; display:block; margin-bottom:2px; }
+  select, button { font-size:14px; padding:4px 6px; border-radius:6px; border:1px solid #999; background:white; }
+  .group { display:flex; flex-direction:column; }
+  .btn { appearance:none; cursor:pointer; font-weight:600; }
+  .btn:hover { background:#f3f3f3; }
+
+  .error { color:#b00020; font-weight:600; }
+</style>
 </head>
 <body>
-  <!-- CHAT -->
-  <aside>
-    <div class="head">
-      <b>Mini-Copilot GIS</b>
-      <small>Ejemplos: “Mapa de envejecimiento”, “Resalta Santander y Reinosa”, “Reset”.</small>
+
+<div id="topbar">
+  <div style="font-weight:700;">Demografía Cantabria · % &lt;15 (juventud) / % &gt;64 (envejecimiento)</div>
+
+  <div class="group">
+    <label for="indicSel">Indicador</label>
+    <select id="indicSel">
+      <option value="juventud" selected>Tasa de juventud (&lt;15)</option>
+      <option value="envejecimiento">Tasa de envejecimiento (&gt;64)</option>
+    </select>
+  </div>
+
+  <div class="group">
+    <label for="yearSel">Año</label>
+    <select id="yearSel"></select>
+  </div>
+
+  <div class="group">
+    <label for="sexoSel">Sexo</label>
+    <select id="sexoSel"></select>
+  </div>
+
+  <div class="group" style="margin-left:12px;">
+    <label>&nbsp;</label>
+    <div style="display:flex; gap:8px;">
+      <button id="btnPrint" class="btn">Imprimir (PDF)</button>
+      <button id="btnJPG" class="btn">Exportar JPG</button>
     </div>
-    <div id="msgs">
-      <div class="m bot"><div class="b">Hola 👋 Pídeme un mapa o municipios a resaltar.</div></div>
-    </div>
-    <form id="f">
-      <input id="q" placeholder="Escribe tu petición cartográfica…" autocomplete="off"/>
-      <button>Enviar</button>
+  </div>
+
+  <div id="statusMsg" style="font-size:12px; color:#555;">Cargando datos…</div>
+</div>
+
+<div id="map"></div>
+
+<div class="panel-info" id="infoBox"><div id="infoContent"></div></div>
+
+<div class="legend" id="legendBox">
+  <div style="font-weight:600; font-size:13px; margin-bottom:4px;" id="legendTitle">% población &lt; 15 años</div>
+  <div id="legendContent"></div>
+</div>
+
+<div class="legend-pop" id="legendPopBox">
+  <div class="legend-pop-title">Población (radio)</div>
+  <div id="legendPopItems"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script src="https://unpkg.com/leaflet.browser.print/dist/leaflet.browser.print.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dom-to-image-more@2.8.0/dist/dom-to-image-more.min.js"></script>
+
+<script>
+// ===================== CONFIG =====================
+const CONFIG = {
+  urls: {
+    // Cambia estas tres URLs por las tuyas (Drive "uc?export=download&id=...", GitHub raw, o ICANE si tienes el endpoint)
+    juventud: "https://www.icane.es/data/api/estructura-demografica-tasa-juventud-menores-15-2022.json?s=[municipios.municipios]f;[anno_esp.annos_esp]c;[sexo_false.sexo_false]c;[Measures]c",
+    envejecimiento: "https://www.icane.es/data/api/estructura-demografica-tasa-envejecimiento-mayores-64-2022.json?s=[municipios.municipios]f;[anno_esp.annos_esp]c;[sexo_false.sexo_false]c;[Measures]c",
+    poblacion:      "URL_A_POBLACION_MUNICIPIO.json",
+
+    // GeoJSON local (carpeta de proyecto)
+    municipios:     "data/municipios_cantabria.geojson"
+  },
+  // nombre exacto de las claves en los JSON de ICANE
+  keys: {
+    juventud: "Tasa de Juventud",
+    envejecimiento: "Tasa de envejecimiento",
+    poblacion: "Habitantes"
+  }
+};
+// ===================================================
+
+const state = { tasas: null, pobl: null, geo: null, years: [], sexes: [] };
+
+const statusMsg = document.getElementById("statusMsg");
+function setStatus(msg, isError=false){
+  statusMsg.innerHTML = isError ? `<span class="error">⚠ ${msg}</span>` : msg;
+}
+
+async function fetchJSON(url){
+  const r = await fetch(url);
+  if(!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+  return r.json();
+}
+
+function buildRatesDict(raw, varKey){
+  // Espera estructura ICANE: { data: { "2024": { "Ambos sexos": { [varKey]: { "39001 - ...": valor, ... } }, "Mujeres": {...}, "Varones": {...} } } }
+  const out = {};
+  const data = raw?.data || {};
+  for(const year of Object.keys(data)){
+    out[year] = out[year] || {};
+    for(const sexo of Object.keys(data[year])){
+      const vals = data[year][sexo]?.[varKey] || {};
+      out[year][sexo] = out[year][sexo] || {};
+      for(const muniLabel of Object.keys(vals)){
+        if(muniLabel === "Total") continue;
+        const ine = muniLabel.split(" - ")[0];
+        const v = Number(vals[muniLabel]);
+        out[year][sexo][ine] = Number.isFinite(v) ? v : null;
+      }
+    }
+  }
+  return out;
+}
+
+function buildPoblDict(raw, keyHabitantes){
+  // Espera: { data: { "Ambos sexos": { "39001 - ...": { "Habitantes": { "2024": 123 } } } , "Mujeres": {...}, "Varones": {...} } }
+  const out = {};
+  const data = raw?.data || {};
+  const sexList = Object.keys(data);
+  for(const sexo of sexList){
+    for(const muniLabel of Object.keys(data[sexo])){
+      if(muniLabel === "Total") continue;
+      const ine = muniLabel.split(" - ")[0];
+      const years = data[sexo][muniLabel]?.[keyHabitantes] || {};
+      for(const year of Object.keys(years)){
+        const v = Number(years[year]);
+        if(!out[year]) out[year]={};
+        if(!out[year][sexo]) out[year][sexo]={};
+        out[year][sexo][ine] = Number.isFinite(v) ? v : null;
+      }
+    }
+  }
+  return out;
+}
+
+function getCommon(arrs){ // intersección de arrays de strings
+  return [...arrs.reduce((set, arr, i) => {
+    const s = new Set(arr);
+    return i === 0 ? s : new Set([...set].filter(x => s.has(x)));
+  }, new Set(arrs[0] || []))].sort((a,b)=>Number(a)-Number(b));
+}
+
+function roughCentroid(geom){
+  let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+  function proc(coords){ coords.forEach(p=>{const x=p[0],y=p[1]; if(x<minX)minX=x; if(y<minY)minY=y; if(x>maxX)maxX=x; if(y>maxY)maxY=y;}); }
+  if(geom.type==="Polygon") geom.coordinates.forEach(r=>proc(r));
+  else if(geom.type==="MultiPolygon") geom.coordinates.forEach(poly=>poly.forEach(r=>proc(r)));
+  const cx=(minX+maxX)/2, cy=(minY+maxY)/2; return [cy,cx];
+}
+function scaleRadius(v){ const r=Math.sqrt(v)*0.15; return Math.max(r,3); }
+function strokeBySexo(sexo){ if(sexo==="Varones")return "#003366"; if(sexo==="Mujeres")return "#660033"; return "#900000"; }
+
+const indicSel=document.getElementById("indicSel"), yearSel=document.getElementById("yearSel"), sexoSel=document.getElementById("sexoSel");
+const legendTitle=document.getElementById("legendTitle"), legendContent=document.getElementById("legendContent");
+const legendPopItems=document.getElementById("legendPopItems");
+const infoBox=document.getElementById("infoBox"), infoContent=document.getElementById("infoContent");
+const btnPrint=document.getElementById("btnPrint"), btnJPG=document.getElementById("btnJPG");
+
+const map=L.map('map',{zoomControl:true});
+const baseOSM=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19, attribution:'&copy; OpenStreetMap contributors'}).addTo(map);
+const basePNOA=L.tileLayer.wms('https://www.ign.es/wms-inspire/pnoa-ma',{layers:'OI.OrthoimageCoverage',format:'image/jpeg',transparent:false, attribution:'&copy; PNOA Máxima Actualidad, © IGN España'});
+L.control.scale({metric:true, imperial:false, maxWidth:200}).addTo(map);
+map.createPane('poblacionPane'); map.getPane('poblacionPane').style.zIndex=650; map.getPane('poblacionPane').style.pointerEvents='auto';
+let geojsonLayer=null; const puntosGroup=L.layerGroup().addTo(map);
+L.control.layers({ "OpenStreetMap":baseOSM, "PNOA (Ortofoto)":basePNOA }, { "Población (círculos)":puntosGroup }, {position:'topleft', collapsed:false}).addTo(map);
+
+function colorScaleFactory(sexo, breaks){
+  let pal; if(sexo==="Varones") pal=["#e6f2ff","#cfe8ff","#9ec5ff","#4c82ff","#0050d4","#002b80"];
+  else if(sexo==="Mujeres") pal=["#ffe6f5","#ffd6ec","#ff99c9","#ff4da1","#cc006a","#660033"];
+  else pal=["#ffe6e6","#ffcccc","#ff9999","#ff4d4d","#cc0000","#660000"];
+  return v=>{ if(v==null||isNaN(v)) return "#cccccc";
+    if(v>breaks[4])return pal[5]; if(v>breaks[3])return pal[4]; if(v>breaks[2])return pal[3];
+    if(v>breaks[1])return pal[2]; if(v>breaks[0])return pal[1]; return pal[0]; };
+}
+function styleFactory(gc){ return f=>({color:'#333',weight:1,fillColor:gc(f.properties.VALOR),fillOpacity:0.7}); }
+
+function hideInfo(){ infoBox.style.display='none'; }
+function showInfo(html){ infoContent.innerHTML=html; infoBox.style.display='block'; }
+
+function onEachFactory(){
+  return (feature,layer)=>{
+    layer.on({
+      mouseover:(e)=>{
+        const p=e.target.feature.properties;
+        const label=(p.INDIC==="juventud")?"Tasa de juventud (&lt;15)":"Tasa de envejecimiento (&gt;64)";
+        const valorTxt=(p.VALOR!=null)?(p.VALOR.toFixed(2)+" %"):"—";
+        showInfo(`<b>${p.NAMEUNIT}</b><br>${label}: <b>${valorTxt}</b><br>Año: ${p.ANIO} · ${p.SEXO}`);
+        e.target.setStyle({weight:2,color:'#000',fillOpacity:0.9});
+        e.target.bringToFront();
+      },
+      mouseout:(e)=>{
+        if(geojsonLayer) geojsonLayer.resetStyle(e.target);
+        hideInfo();
+      },
+      click:(e)=>{ map.fitBounds(e.target.getBounds()); }
+    });
+  };
+}
+
+function buildLegend(indic, sexo, breaks){
+  const gc=colorScaleFactory(sexo, breaks);
+  legendTitle.textContent = (indic==="juventud") ? "% población < 15 años" : "% población > 64 años";
+  const rows=[["< "+breaks[0].toFixed(2)+"%",gc(breaks[0]-0.01)],
+    [breaks[0].toFixed(2)+"% – "+breaks[1].toFixed(2)+"%",gc((breaks[0]+breaks[1])/2)],
+    [breaks[1].toFixed(2)+"% – "+breaks[2].toFixed(2)+"%",gc((breaks[1]+breaks[2])/2)],
+    [breaks[2].toFixed(2)+"% – "+breaks[3].toFixed(2)+"%",gc((breaks[2]+breaks[3])/2)],
+    [breaks[3].toFixed(2)+"% – "+breaks[4].toFixed(2)+"%",gc((breaks[3]+breaks[4])/2)],
+    ["> "+breaks[4].toFixed(2)+"%",gc(breaks[4]+0.01)],["Sin datos","#cccccc"]];
+  legendContent.innerHTML = rows.map(([l,c])=>`<div class="legend-row"><div class="legend-color" style="background:${c};"></div><div>${l}</div></div>`).join("");
+}
+
+function rebuildPuntos(year, sexo){
+  puntosGroup.clearLayers();
+  const pobVals = state.pobl[year]?.[sexo]; if(!pobVals) return;
+  state.geo.features.forEach(f=>{
+    const ine=f.properties.CODIGOINE; const hab=pobVals[ine]; if(!hab||isNaN(hab)) return;
+    const [lat,lon]=roughCentroid(f.geometry); const r=scaleRadius(hab);
+    const color = (sexo==="Varones")?"#003366":(sexo==="Mujeres")?"#660033":"#900000";
+    const m=L.circleMarker([lat,lon],{pane:'poblacionPane',radius:r,weight:2,color:color,fillColor:'#b0c4de',fillOpacity:0.7})
+      .bindTooltip(`${f.properties.NAMEUNIT}<br/>Población ${year}, ${sexo}: ${hab.toLocaleString("es-ES")} hab`,{sticky:true});
+    puntosGroup.addLayer(m);
+  });
+  // Leyenda de población (cuantiles 10/50/90 del año/sexo activos)
+  const vals = Object.values(pobVals).filter(v=>Number.isFinite(v)).sort((a,b)=>a-b);
+  const q = p => vals.length? vals[Math.floor(p*(vals.length-1))] : 0;
+  const ref=[q(0.1), q(0.5), q(0.9)];
+  legendPopItems.innerHTML = ref.map(v=>{
+    const r=scaleRadius(v); return `<div class="pop-swatch"><div class="pop-circle" style="width:${(r*2).toFixed(1)}px;height:${(r*2).toFixed(1)}px;"></div><div>${Math.round(v).toLocaleString("es-ES")} hab</div></div>`;
+  }).join("");
+}
+
+function refreshMap(){
+  const indic=indicSel.value, year=yearSel.value, sexo=sexoSel.value;
+  // Añadir valor al GeoJSON clonado
+  const valores = state.tasas[indic]?.[year]?.[sexo] || {};
+  const gj = JSON.parse(JSON.stringify(state.geo));
+  gj.features.forEach(f=>{
+    const ine=f.properties.CODIGOINE;
+    f.properties.INDIC=indic; f.properties.SEXO=sexo; f.properties.ANIO=year;
+    f.properties.VALOR = (ine in valores) ? valores[ine] : null;
+  });
+
+  // Cálculo de cortes globales por indicador (sobre todos los años/sexos disponibles)
+  const allVals=[];
+  const bloc = state.tasas[indic]||{};
+  Object.keys(bloc).forEach(y=>{
+    Object.values(bloc[y]||{}).forEach(obj=>{
+      Object.values(obj||{}).forEach(v=>{ if(Number.isFinite(v)) allVals.push(v); });
+    });
+  });
+  allVals.sort((a,b)=>a-b);
+  const q = p => allVals.length ? allVals[Math.floor(p*(allVals.length-1))] : 0;
+  const breaks=[q(0.05), q(0.25), q(0.5), q(0.75), q(0.95)].map(x=>Number(x.toFixed(2)));
+
+  // Pintado
+  if(geojsonLayer) map.removeLayer(geojsonLayer);
+  const scale = colorScaleFactory(sexo, breaks);
+  geojsonLayer = L.geoJSON(gj, { style: styleFactory(scale), onEachFeature: onEachFactory() }).addTo(map);
+  if(!map._hasFit){ map.fitBounds(geojsonLayer.getBounds()); map._hasFit=true; }
+  buildLegend(indic, sexo, breaks);
+  rebuildPuntos(year, sexo);
+}
+
+async function init(){
+  try{
+    setStatus("Cargando municipios…");
+    const geo = await fetchJSON(CONFIG.urls.municipios);
+    if(!geo || !geo.features) throw new Error("GeoJSON inválido o vacío");
+    state.geo = geo;
+
+    setStatus("Cargando tasas (juventud) …");
+    const jv = await fetchJSON(CONFIG.urls.juventud);
+    setStatus("Cargando tasas (envejecimiento) …");
+    const ag = await fetchJSON(CONFIG.urls.envejecimiento);
+    setStatus("Cargando población …");
+    const pb = await fetchJSON(CONFIG.urls.poblacion);
+
+    state.tasas = {
+      juventud: buildRatesDict(jv, CONFIG.keys.juventud),
+      envejecimiento: buildRatesDict(ag, CONFIG.keys.envejecimiento)
+    };
+    state.pobl  = buildPoblDict(pb, CONFIG.keys.poblacion);
+
+    // años comunes y sexos
+    const yearsJ = Object.keys(state.tasas.juventud||{});
+    const yearsA = Object.keys(state.tasas.envejecimiento||{});
+    const yearsP = Object.keys(state.pobl||{});
+    state.years = getCommon([yearsJ, yearsA, yearsP]);
+    if(!state.years.length) throw new Error("No hay intersección de años entre datasets.");
+
+    const sexesP = Object.keys(pb?.data || {});
+    state.sexes = ["Ambos sexos", ...sexesP.filter(s=>s!=="Ambos sexos")];
+
+    // Rellenar selects y arrancar
+    yearSel.innerHTML = state.years.map(y=>`<option value="${y}">${y}</option>`).join("");
+    sexoSel.innerHTML = state.sexes.map(s=>`<option value="${s}">${s}</option>`).join("");
+    yearSel.value = state.years[state.years.length-1];
+    sexoSel.value = state.sexes[0];
+
+    setStatus("Listo. Fuente: ICANE / INE");
+    refreshMap();
+
+    indicSel.onchange = refreshMap;
+    yearSel.onchange  = refreshMap;
+    sexoSel.onchange  = refreshMap;
+
+    // Controles de exportación
+    btnPrint.addEventListener("click", ()=>{ L.control.browserPrint({ printModes:["Landscape","Portrait","Auto"] }).print(map); });
+    btnJPG.addEventListener("click", ()=>{
+      const node=document.getElementById('map'); const dt=new Date(); const stamp=dt.toISOString().slice(0,19).replace(/[:T]/g,'-');
+      domtoimage.toJpeg(node,{quality:0.95,bgcolor:'#ffffff'}).then(dataUrl=>{
+        const link=document.createElement('a'); link.download=`demografia_cantabria_${stamp}.jpg`; link.href=dataUrl;
+        document.body.appendChild(link); link.click(); document.body.removeChild(link);
+      }).catch(err=>alert("No se pudo exportar a JPG: "+err));
+    });
+
+  }catch(err){
+    console.error(err);
+    setStatus(`Error cargando datos: ${err.message}`, true);
+  }
+}
+init();
+</script>
+</body>
+</html>
